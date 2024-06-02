@@ -47,6 +47,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    const mealsCollection=client.db('HostelManagementDb').collection('meals')
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body
@@ -76,7 +77,22 @@ async function run() {
         res.status(500).send(err)
       }
     })
-
+    // get all the meals from db
+    app.get('/meals',async(req,res)=>{
+      const {category}=req.query
+      console.log(category);
+      const query={}
+      if(category && category!=='null'&&category!=='All Meals')query.category=category
+    
+      const result=await mealsCollection.find(query).toArray()
+      res.send(result)
+    })
+    app.get('/meals/:id',async(req,res)=>{
+      const{id}=req.params
+      const query={_id:new ObjectId(id)}
+      const result=await mealsCollection.findOne(query) 
+      res.send(result)
+    })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
     console.log(
