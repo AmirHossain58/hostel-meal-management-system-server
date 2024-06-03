@@ -65,6 +65,9 @@ async function run() {
         })
         .send({ success: true })
     })
+
+
+    
     // Logout
     app.get('/logout', async (req, res) => {
       try {
@@ -90,6 +93,7 @@ async function run() {
       const result=await mealsCollection.find(query).toArray()
       res.send(result)
     })
+    // get a meal  from db by _id
     app.get('/meals/:id',async(req,res)=>{
       const{id}=req.params
       const query={_id:new ObjectId(id)}
