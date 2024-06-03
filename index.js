@@ -100,6 +100,21 @@ async function run() {
       const result=await mealsCollection.findOne(query) 
       res.send(result)
     })
+    // update like count api
+    app.put('/meals/:id',async(req,res)=>{
+      const {like}=req.body
+      console.log(like);
+      const{id}=req.params
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+         like:like
+        },
+      };
+      const result= await mealsCollection.updateOne(query,updateDoc,options)
+     res.send(result)
+    })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
     console.log(
