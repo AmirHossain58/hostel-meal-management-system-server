@@ -22,6 +22,8 @@ app.use(cors(corsOptions))
 app.use(express.json())
 app.use(cookieParser())
 
+
+
 // Verify Token Middleware
 const verifyToken = async (req, res, next) => {
   const token = req.cookies?.token
@@ -38,6 +40,7 @@ const verifyToken = async (req, res, next) => {
     next()
   })
 }
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.4j3msur.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
@@ -102,18 +105,27 @@ async function run() {
     })
     // update like count api
     app.put('/meals/:id',async(req,res)=>{
-      const {like}=req.body
-      console.log(like);
       const{id}=req.params
+      const {like,review}=req.body
       const query={_id:new ObjectId(id)}
       const options = { upsert: true };
-      const updateDoc = {
-        $set: {
-         like:like
-        },
-      };
-      const result= await mealsCollection.updateOne(query,updateDoc,options)
-     res.send(result)
+      if(like){
+        const updateDoc = {
+          $set: {
+           like:like,
+          },
+        };
+        const result= await mealsCollection.updateOne(query,updateDoc,options)
+       res.send(result)
+      }else if(review){
+        const updateDoc = {
+          $push: {
+            reviews:review,
+          },
+        };
+        const result= await mealsCollection.updateOne(query,updateDoc,options)
+       res.send(result)
+      }
     })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
