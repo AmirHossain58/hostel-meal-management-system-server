@@ -51,6 +51,7 @@ const client = new MongoClient(uri, {
   },
 })
 
+
 async function run() {
   try {
     const mealsCollection=client.db('HostelManagementDb').collection('meals')
