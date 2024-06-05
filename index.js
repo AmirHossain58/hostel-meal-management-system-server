@@ -3,6 +3,7 @@ const app = express()
 require('dotenv').config()
 const cors = require('cors')
 const cookieParser = require('cookie-parser')
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 const jwt = require('jsonwebtoken')
 
@@ -55,6 +56,8 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const mealsCollection=client.db('HostelManagementDb').collection('meals')
+    const bookingsCollection=client.db('HostelManagementDb').collection('bookings')
+    const usersCollection=client.db('HostelManagementDb').collection('users')
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body
@@ -105,28 +108,126 @@ async function run() {
       res.send(result)
     })
     // update like count api
-    app.put('/meals/:id',async(req,res)=>{
+    app.put('/meals/like/:id',async(req,res)=>{
       const{id}=req.params
-      const {like,review}=req.body
+      const {like}=req.body
       const query={_id:new ObjectId(id)}
       const options = { upsert: true };
-      if(like){
         const updateDoc = {
           $set: {
            like:like,
           },
         };
         const result= await mealsCollection.updateOne(query,updateDoc,options)
-       res.send(result)
-      }else if(review){
-        const updateDoc = {
+       return res.send(result)
+       
+    })
+    // update review count api
+    app.put('/meals/review/:id',async(req,res)=>{
+      const{id}=req.params
+      const review=req.body
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+        const newReview = {
           $push: {
             reviews:review,
           },
         };
-        const result= await mealsCollection.updateOne(query,updateDoc,options)
+        const result= await mealsCollection.updateOne(query,newReview,options)
        res.send(result)
+      
+    })
+    //  create-payment-intent
+    app.post('/create-payment-intent',async(req,res)=>{
+    const {price}=req.body
+    console.log(price);
+    const priceInCent = parseInt(price) * 100
+    if (!price || priceInCent < 1) return
+    // generate clientSecret
+    const { client_secret } = await stripe.paymentIntents.create({
+      amount: priceInCent,
+      currency: 'usd',
+      // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    })
+    // send client secret as response
+    res.send({ clientSecret: client_secret })
+    })
+      // Save a booking data in db
+      app.post('/booking', async (req, res) => {
+        const bookingData = req.body
+        // save room booking info
+        const result = await bookingsCollection.insertOne(bookingData)
+        // send email to guest
+        // sendEmail(bookingData?.guest?.email, {
+        //   subject: 'Booking Successful!',
+        //   message: `You've successfully booked a room through StayVista. Transaction Id: ${bookingData.transactionId}`,
+        // })
+        // send email to host
+        // sendEmail(bookingData?.host?.email, {
+        //   subject: 'Your room got booked!',
+        //   message: `Get ready to welcome ${bookingData.guest.name}.`,
+        // })
+  
+        res.send(result)
+      })
+      app.get('/booking/:email',async(req,res)=>{
+        const {email}=req.params
+        console.log(178,email);
+        const query={email:email}
+        const result=await bookingsCollection.findOne(query,)
+        console.log(181,result);
+        res.send(result)
+      })
+      // save a user data in db
+    app.put('/user', async (req, res) => {
+      const user = req.body
+      const query = { email: user?.email }
+      // check if user already exists in db
+      const isExist = await usersCollection.findOne(query)
+      if (isExist) {
+        if (user.status === 'Requested') {
+          // if existing user try to change his role
+          const result = await usersCollection.updateOne(query, {
+            $set: { status: user?.status },
+          })
+          return res.send(result)
+        } else { 
+          // if existing user login again
+          return res.send(isExist)
+        }
       }
+
+      // save user for the first time
+      const options = { upsert: true }
+      const updateDoc = {
+        $set: {
+          ...user,
+          timestamp: Date.now(),
+        },
+      }
+      const result = await usersCollection.updateOne(query, updateDoc, options)
+      // welcome new user
+      // sendEmail(user?.email, {
+      //   subject: 'Welcome to Stayvista!',
+      //   message: `Hope you will find you destination`,
+      // })
+      res.send(result)
+    })
+
+    // get a user info by email from db
+    app.get('/user/:email', async (req, res) => {
+      const email = req.params.email
+      const result = await usersCollection.findOne({ email })
+      res.send(result)
+    })
+
+    // get all users data from db
+    app.get('/users', verifyToken, async (req, res) => {
+      const result = await usersCollection.find().toArray()
+      res.send(result)
     })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
