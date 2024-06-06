@@ -58,6 +58,7 @@ async function run() {
     const mealsCollection=client.db('HostelManagementDb').collection('meals')
     const bookingsCollection=client.db('HostelManagementDb').collection('bookings')
     const usersCollection=client.db('HostelManagementDb').collection('users')
+    const requestsCollection=client.db('HostelManagementDb').collection('requests')
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body
@@ -92,10 +93,12 @@ async function run() {
     })
     // get all the meals from db
     app.get('/meals',async(req,res)=>{
-      const {category}=req.query
+      const {category,search}=req.query
       console.log(category);
-      const query={}
-      if(category && category!=='null'&&category!=='All Meals')query.category=category
+      const query={
+        title: { $regex: search, $options: 'i' },
+      }
+      if(category && category!=='null'&&category!=='All Meals'&&category!=='undefined')query.category=category
     
       const result=await mealsCollection.find(query).toArray()
       res.send(result)
@@ -139,7 +142,7 @@ async function run() {
     })
     //  create-payment-intent
     app.post('/create-payment-intent',async(req,res)=>{
-    const {price}=req.body
+    const {price}=req.body 
     console.log(price);
     const priceInCent = parseInt(price) * 100
     if (!price || priceInCent < 1) return
@@ -173,12 +176,26 @@ async function run() {
   
         res.send(result)
       })
+      app.post('/Meal-request', async (req, res) => {
+        const requestData = req.body
+        // save room booking info
+        const result = await requestsCollection.insertOne(requestData)
+        // send email to guest
+        // sendEmail(bookingData?.guest?.email, {
+        //   subject: 'Booking Successful!',
+        //   message: `You've successfully booked a room through StayVista. Transaction Id: ${bookingData.transactionId}`,
+        // })
+        // send email to host
+        // sendEmail(bookingData?.host?.email, {
+        //   subject: 'Your room got booked!',
+        //   message: `Get ready to welcome ${bookingData.guest.name}.`,
+        // })
+        res.send(result)
+      }) 
       app.get('/booking/:email',async(req,res)=>{
         const {email}=req.params
-        console.log(178,email);
         const query={email:email}
         const result=await bookingsCollection.findOne(query,)
-        console.log(181,result);
         res.send(result)
       })
       // save a user data in db
