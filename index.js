@@ -125,7 +125,7 @@ async function run() {
        return res.send(result)
        
     })
-    // update review count api
+    // update review count and add review api
     app.put('/meals/review/:id',async(req,res)=>{
       const{id}=req.params
       const review=req.body
