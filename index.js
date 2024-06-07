@@ -93,16 +93,36 @@ async function run() {
     })
     // get all the meals from db
     app.get('/meals',async(req,res)=>{
-      const {category,search}=req.query
-      console.log(category);
+      const {category,}=req.query
       const query={
-        title: { $regex: search, $options: 'i' },
       }
       if(category && category!=='null'&&category!=='All Meals'&&category!=='undefined')query.category=category
     
       const result=await mealsCollection.find(query).toArray()
-      res.send(result)
+      res.send(result) 
     })
+app.get('/api/meals',async (req, res) => {  
+  const {category,search,minPrice, maxPrice}=req.query
+      const query={
+        title: { $regex: search, $options: 'i' },
+      }
+      if (minPrice !== undefined && maxPrice !== undefined) {
+        query.price = { $gte: parseFloat(minPrice), $lte: parseFloat(maxPrice) }; 
+      }
+      if(category && category!=='null'&&category!=='All Meals'&&category!=='undefined')query.category=category
+  const page = 1;
+  const pageSize = 10;
+  const meals=await mealsCollection.find(query).toArray()
+  const totalMeals = meals.length;
+  const totalPages = Math.ceil(totalMeals / pageSize);
+
+  const paginatedMeals = meals.slice((page - 1) * pageSize, page * pageSize);
+  res.json({
+    meals: paginatedMeals,
+    nextPage: page < totalPages ? page + 1 : null,
+  });
+});
+
     // get a meal  from db by _id
     app.get('/meals/:id',async(req,res)=>{
       const{id}=req.params
@@ -143,7 +163,6 @@ async function run() {
     //  create-payment-intent
     app.post('/create-payment-intent',async(req,res)=>{
     const {price}=req.body 
-    console.log(price);
     const priceInCent = parseInt(price) * 100
     if (!price || priceInCent < 1) return
     // generate clientSecret
@@ -205,10 +224,10 @@ async function run() {
       // check if user already exists in db
       const isExist = await usersCollection.findOne(query)
       if (isExist) {
-        if (user.status === 'Requested') {
+        if (user.badge === 'Silver'||'Gold'||'Platinum') {
           // if existing user try to change his role
           const result = await usersCollection.updateOne(query, {
-            $set: { status: user?.status },
+            $set: { badge: user?.badge },
           })
           return res.send(result)
         } else { 
