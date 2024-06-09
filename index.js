@@ -145,7 +145,7 @@ app.get('/api/meals',async (req, res) => {
        return res.send(result)
        
     })
-    // update review count and add review api
+    // update review count and add review 
     app.put('/meals/review/:id',async(req,res)=>{
       const{id}=req.params
       const review=req.body
@@ -200,6 +200,13 @@ app.get('/api/meals',async (req, res) => {
         const {email}=req.params
         const query={requesterEmail:email}
         const result=await requestsCollection.find(query).toArray()
+        res.send(result)  
+      }) 
+      // delete  a requested meal  
+      app.delete('/requested-meals/:id',async(req,res)=>{
+        const {id}=req.params
+        const query={_id:new ObjectId(id)}
+        const result=await requestsCollection.deleteOne(query)
         res.send(result) 
       }) 
       // get all reviews by user email from db
@@ -214,10 +221,19 @@ app.get('/api/meals',async (req, res) => {
         const result=await mealsCollection.aggregate(pipeline).toArray()
         res.send(result) 
       }) 
+      // delete  a review  
+      app.delete('/meals/review/:id',async(req,res)=>{
+        const {id: reviewId}=req.params
+        console.log(reviewId);
+        const query={"reviews.reviewId":reviewId}
+        const result=await requestsCollection.updateOne(query, { $pull: { reviews: {"reviews.reviewId":reviewId } } })
+        console.log(result);
+        res.send(result)   
+      })  
 
       // Meal-request requester data save in db 
       app.post('/Meal-request', async (req, res) => {
-        const requestData = req.body
+        const requestData = req.body 
         // save room booking info
         const result = await requestsCollection.insertOne(requestData)
         // send email to guest
@@ -238,6 +254,7 @@ app.get('/api/meals',async (req, res) => {
         const result=await bookingsCollection.findOne(query)
         res.send(result)
       })
+      // get payments history form db by user email
       app.get('/payments/:email',async(req,res)=>{
         const {email}=req.params
         console.log(email);
