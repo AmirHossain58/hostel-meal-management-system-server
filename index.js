@@ -195,6 +195,26 @@ app.get('/api/meals',async (req, res) => {
   
         res.send(result)
       })
+      // get all requested meal by user email from db
+      app.get('/requested-meals/:email',async(req,res)=>{
+        const {email}=req.params
+        const query={requesterEmail:email}
+        const result=await requestsCollection.find(query).toArray()
+        res.send(result) 
+      }) 
+      // get all reviews by user email from db
+      app.get('/reviews/:email',async(req,res)=>{ 
+        const {email}=req.params
+        const query={'reviews.email':email}
+        const pipeline = [
+          { $unwind: "$reviews" }, // Unwind the reviews array
+          { $match: { "reviews.email": email } }, // Match the reviews with the given email
+          { $project: { _id: 0, review: "$reviews" ,title:'$title',like:'$like',image:'$image',mealId:'$_id'} }
+        ]
+        const result=await mealsCollection.aggregate(pipeline).toArray()
+        res.send(result) 
+      }) 
+
       // Meal-request requester data save in db 
       app.post('/Meal-request', async (req, res) => {
         const requestData = req.body
@@ -215,7 +235,14 @@ app.get('/api/meals',async (req, res) => {
       app.get('/booking/:email',async(req,res)=>{
         const {email}=req.params
         const query={email:email}
-        const result=await bookingsCollection.findOne(query,)
+        const result=await bookingsCollection.findOne(query)
+        res.send(result)
+      })
+      app.get('/payments/:email',async(req,res)=>{
+        const {email}=req.params
+        console.log(email);
+        const query={email:email}
+        const result=await bookingsCollection.find(query).toArray()
         res.send(result)
       })
       // save a user data in db
