@@ -93,35 +93,65 @@ async function run() {
     })
     // get all the meals from db
     app.get('/meals',async(req,res)=>{
-      const {category,}=req.query
+      const {category,sortLikes,sortReviews}=req.query
       const query={
       }
       if(category && category!=='null'&&category!=='All Meals'&&category!=='undefined')query.category=category
-    
-      const result=await mealsCollection.find(query).toArray()
+      let options = {}
+      if (sortLikes) options = { sort: { like: sortLikes === 'asc' ? 1 : -1 } }
+      if (sortReviews) options = { sort: { reviewCount: sortReviews === 'asc' ? 1 : -1 } }
+      const result=await mealsCollection.find(query,options).toArray()
+      res.send(result) 
+    }) 
+    app.delete('/meals/:id',async(req,res)=>{
+      const id=req.params.id
+      const query={_id:new ObjectId(id)}
+      const result=await mealsCollection.deleteOne(query)
       res.send(result) 
     })
-app.get('/api/meals',async (req, res) => {  
-  const {category,search,minPrice, maxPrice}=req.query
-      const query={
-        title: { $regex: search, $options: 'i' },
-      }
-      if (minPrice !== undefined && maxPrice !== undefined) {
-        query.price = { $gte: parseFloat(minPrice), $lte: parseFloat(maxPrice) }; 
-      }
-      if(category && category!=='null'&&category!=='All Meals'&&category!=='undefined')query.category=category
-  const page = 1;
-  const pageSize = 10;
-  const meals=await mealsCollection.find(query).toArray()
-  const totalMeals = meals.length;
-  const totalPages = Math.ceil(totalMeals / pageSize);
+    app.get('/api/meals',async (req, res) => {  
+      const {category,search,minPrice, maxPrice}=req.query
+          const query={
+            title: { $regex: search, $options: 'i' },
+          }
+          if (minPrice !== undefined && maxPrice !== undefined) {
+            query.price = { $gte: parseFloat(minPrice), $lte: parseFloat(maxPrice) }; 
+          }
+          if(category && category!=='null'&&category!=='All Meals'&&category!=='undefined')query.category=category
+      const page = 1;
+      const pageSize = 10;
+      const meals=await mealsCollection.find(query).toArray()
+      const totalMeals = meals.length;
+      const totalPages = Math.ceil(totalMeals / pageSize);
 
-  const paginatedMeals = meals.slice((page - 1) * pageSize, page * pageSize);
-  res.json({
-    meals: paginatedMeals,
-    nextPage: page < totalPages ? page + 1 : null,
-  });
-});
+      const paginatedMeals = meals.slice((page - 1) * pageSize, page * pageSize);
+      res.json({
+        meals: paginatedMeals,
+        nextPage: page < totalPages ? page + 1 : null,
+      });
+    });
+    // save a meal
+    app.post('/meals',async(req,res)=>{
+      const mealData=req.body
+      console.log(mealData);
+      result= await mealsCollection.insertOne(mealData)
+      res.send(result) 
+    }) 
+    // update A meal
+    app.put('/meals/update/:id',async(req,res)=>{
+      const{id}=req.params
+      const meal=req.body
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+        const newReview = {
+          $set: {
+           ...meal
+          },
+        };
+        const result= await mealsCollection.updateOne(query,newReview,options)
+       res.send(result)
+      
+    })
 
     // get a meal  from db by _id
     app.get('/meals/:id',async(req,res)=>{
@@ -202,6 +232,37 @@ app.get('/api/meals',async (req, res) => {
         const result=await requestsCollection.find(query).toArray()
         res.send(result)  
       }) 
+      // get all requested from db
+      app.get('/requested-meals',async(req,res)=>{
+        const{search}=req.query
+        const query={
+          requesterEmail: { $regex: search, $options: 'i' },
+          requesterName: { $regex: search, $options: 'i' },
+        }
+        const result=await requestsCollection.find(query).toArray()
+        res.send(result)  
+      }) 
+      // change meal stats 
+      app.put('/requested-meals/:id',async(req,res)=>{
+        const{id}=req.params
+        const status=req.body
+        const query={_id:new ObjectId(id)}
+          const newReview = {
+            $set: {
+             ...status
+            },
+          };
+          const result= await requestsCollection.updateOne(query,newReview)
+         res.send(result)
+        
+      })
+      // admin meals added count 
+      app.get('/meals-added/:email',async(req,res)=>{
+        const {email}=req.params
+        const query={'admin.email':email}
+        const result=await mealsCollection.find(query).toArray()
+        res.send(result)   
+      }) 
       // delete  a requested meal  
       app.delete('/requested-meals/:id',async(req,res)=>{
         const {id}=req.params
@@ -221,13 +282,38 @@ app.get('/api/meals',async (req, res) => {
         const result=await mealsCollection.aggregate(pipeline).toArray()
         res.send(result) 
       }) 
+      // get all reviews for admin from db
+      app.get('/reviews',async(req,res)=>{ 
+        const pipeline = [
+          { $unwind: "$reviews" }, // Unwind the reviews array
+          { $project: { _id: 0, review: "$reviews" ,title:'$title',like:'$like',image:'$image',mealId:'$_id',reviewCount:'$reviewCount'} }
+        ]
+        const result=await mealsCollection.aggregate(pipeline).toArray()
+        res.send(result) 
+      }) 
       // delete  a review  
-      app.delete('/meals/review/:id',async(req,res)=>{
-        const {id: reviewId}=req.params
-        console.log(reviewId);
-        const query={"reviews.reviewId":reviewId}
-        const result=await requestsCollection.updateOne(query, { $pull: { reviews: {"reviews.reviewId":reviewId } } })
-        console.log(result);
+      app.put('/meals-review/:id',async(req,res)=>{
+        const{id}=req.params
+      const {reviewId}=req.body
+      console.log(id,reviewId); 
+      const query={_id:new ObjectId(id)}
+        const deleteReview = { 
+          $pull: {
+            reviews: {"reviewId":reviewId } 
+          },
+        };
+        const result=await mealsCollection.updateOne(query,deleteReview)
+        res.send(result)   
+      })  
+      // edit a review
+      app.put('/meals-review-edit/:id',async(req,res)=>{
+        const{id}=req.params
+      const {reviewId,comment,rating}=req.body
+      const query={_id:new ObjectId(id),'reviews.reviewId':reviewId}
+        const editReview = {
+           $set: { "reviews.$.rating": rating, "reviews.$.comment": comment } 
+          }
+        const result=await mealsCollection.updateOne(query,editReview)
         res.send(result)   
       })  
 
@@ -310,6 +396,17 @@ app.get('/api/meals',async (req, res) => {
       const result = await usersCollection.find().toArray()
       res.send(result)
     })
+      //update a user role
+      app.patch('/users/update/:email', async (req, res) => {
+        const email = req.params.email
+        const user = req.body
+        const query = { email }
+        const updateDoc = {
+          $set: { ...user, timestamp: Date.now() },
+        }
+        const result = await usersCollection.updateOne(query, updateDoc)
+        res.send(result)
+      })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
     console.log(
