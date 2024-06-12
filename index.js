@@ -4,7 +4,7 @@ require('dotenv').config()
 const cors = require('cors')
 const cookieParser = require('cookie-parser')
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
+const { MongoClient, ServerApiVersion, ObjectId, serialize } = require('mongodb')
 const jwt = require('jsonwebtoken')
 
 const port = process.env.PORT || 8000
@@ -47,7 +47,7 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
-    strict: true,
+    // strict: true,
     deprecationErrors: true,
   },
 })
@@ -60,6 +60,15 @@ async function run() {
     const usersCollection=client.db('HostelManagementDb').collection('users')
     const requestsCollection=client.db('HostelManagementDb').collection('requests')
     const upcomingMealsCollection=client.db('HostelManagementDb').collection('upcomingMeals')
+    await mealsCollection.createIndex({
+      category: 'text',
+      title: 'text',
+      description: 'text',
+      'admin.name': 'text',
+      'reviews.reviewer': 'text',
+      'reviews.comment': 'text'
+    });
+    console.log("Indexes created successfully");
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body
@@ -106,7 +115,13 @@ async function run() {
     }) 
     // get all the upcoming Meals from db
     app.get('/upcoming-meals',async(req,res)=>{
-      const result=await upcomingMealsCollection.find().toArray()
+      const {sortLikes}=req.query
+      console.log(sortLikes);
+      const query={
+      }
+      let options = {}
+      if (sortLikes) options = { sort: { like: sortLikes === 'asc' ? 1 : -1 } }
+      const result=await upcomingMealsCollection.find(query,options).toArray()
       res.send(result) 
     }) 
      // get a upcoming Meals from db
@@ -117,17 +132,27 @@ async function run() {
       const result=await upcomingMealsCollection.findOne(query)
       res.send(result) 
     }) 
+     // save a upcoming-meals
+     app.post('/upcoming-meals',async(req,res)=>{
+      const mealData=req.body
+      result= await upcomingMealsCollection.insertOne(mealData)
+      res.send(result) 
+    })
     app.delete('/meals/:id',async(req,res)=>{
       const id=req.params.id
+      console.log(id); 
       const query={_id:new ObjectId(id)}
       const result=await mealsCollection.deleteOne(query)
       res.send(result) 
     })
     app.get('/api/meals',async (req, res) => {  
       const {category,search,minPrice, maxPrice}=req.query
-          const query={
-            title: { $regex: search, $options: 'i' },
+          let query={
+            // title: { $regex: search, $options: 'i' },
+            // $text: { $search: search }
           }
+          console.log(154,search);
+          if(search)query={$text: { $search: search }}
           if (minPrice !== undefined && maxPrice !== undefined) {
             query.price = { $gte: parseFloat(minPrice), $lte: parseFloat(maxPrice) }; 
           }
@@ -164,7 +189,15 @@ async function run() {
         };
         const result= await mealsCollection.updateOne(query,newReview,options)
        res.send(result)
-      
+       
+    })
+     // delete  a requested meal  
+     app.delete('/upcoming-meals/:id',async(req,res)=>{
+      const {id}=req.params
+      console.log(id);
+      const query={_id:new ObjectId(id)}
+      const result=await upcomingMealsCollection.deleteOne(query)
+      res.send(result) 
     })
     // update A meal upcoming-meals
     app.put('/upcoming-meals/update/:id',async(req,res)=>{
@@ -178,7 +211,7 @@ async function run() {
           },
         };
         const result= await upcomingMealsCollection.updateOne(query,newReview,options)
-       res.send(result)
+       res.send(result) 
       
     })
 
@@ -310,8 +343,12 @@ async function run() {
       app.get('/requested-meals',async(req,res)=>{
         const{search}=req.query
         const query={
-          requesterEmail: { $regex: search, $options: 'i' },
-          requesterName: { $regex: search, $options: 'i' },
+          $or: [
+            { requesterEmail: { $regex: search, $options: 'i' } }, // Search by email
+            { requesterName: { $regex: search, $options: 'i' } }     // Search by name
+          ]
+          // requesterEmail: { $regex: search, $options: 'i' },
+          // requesterName: { $regex: search, $options: 'i' },
         }
         const result=await requestsCollection.find(query).toArray()
         res.send(result)  
@@ -472,8 +509,10 @@ async function run() {
       const {search}=req.query
       console.log(search);
       const query={
-        email: { $regex: search, $options: 'i' },
-        name: { $regex: search, $options: 'i' },
+        $or: [
+          { name: { $regex: search, $options: 'i' } }, // Search by username
+          { email: { $regex: search, $options: 'i' } }     // Search by email
+        ]
       }
       const result = await usersCollection.find(query).toArray()
       res.send(result)
