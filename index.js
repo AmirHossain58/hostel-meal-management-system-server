@@ -59,6 +59,7 @@ async function run() {
     const bookingsCollection=client.db('HostelManagementDb').collection('bookings')
     const usersCollection=client.db('HostelManagementDb').collection('users')
     const requestsCollection=client.db('HostelManagementDb').collection('requests')
+    const upcomingMealsCollection=client.db('HostelManagementDb').collection('upcomingMeals')
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body
@@ -101,6 +102,19 @@ async function run() {
       if (sortLikes) options = { sort: { like: sortLikes === 'asc' ? 1 : -1 } }
       if (sortReviews) options = { sort: { reviewCount: sortReviews === 'asc' ? 1 : -1 } }
       const result=await mealsCollection.find(query,options).toArray()
+      res.send(result) 
+    }) 
+    // get all the upcoming Meals from db
+    app.get('/upcoming-meals',async(req,res)=>{
+      const result=await upcomingMealsCollection.find().toArray()
+      res.send(result) 
+    }) 
+     // get a upcoming Meals from db
+    app.get('/upcoming-meals/:id',async(req,res)=>{
+      const id=req.params.id
+      console.log(id);
+      const query={_id:new ObjectId(id)}
+      const result=await upcomingMealsCollection.findOne(query)
       res.send(result) 
     }) 
     app.delete('/meals/:id',async(req,res)=>{
@@ -152,6 +166,21 @@ async function run() {
        res.send(result)
       
     })
+    // update A meal upcoming-meals
+    app.put('/upcoming-meals/update/:id',async(req,res)=>{
+      const{id}=req.params
+      const meal=req.body
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+        const newReview = {
+          $set: {
+           ...meal
+          },
+        };
+        const result= await upcomingMealsCollection.updateOne(query,newReview,options)
+       res.send(result)
+      
+    })
 
     // get a meal  from db by _id
     app.get('/meals/:id',async(req,res)=>{
@@ -175,7 +204,22 @@ async function run() {
        return res.send(result)
        
     })
-    // update review count and add review 
+    // update upcoming-meals like count api
+    app.put('/upcoming-meals/like/:id',async(req,res)=>{
+      const{id}=req.params
+      const {like}=req.body
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+        const updateDoc = {
+          $set: {
+           like:like,
+          },
+        };
+        const result= await upcomingMealsCollection.updateOne(query,updateDoc,options)
+       return res.send(result)
+       
+    })
+    // update review  add review 
     app.put('/meals/review/:id',async(req,res)=>{
       const{id}=req.params
       const review=req.body
@@ -187,6 +231,36 @@ async function run() {
           },
         };
         const result= await mealsCollection.updateOne(query,newReview,options)
+       res.send(result)
+      
+    })
+    // update upcoming-meals review count and add review 
+    app.put('/upcoming-meals/review/:id',async(req,res)=>{
+      const{id}=req.params
+      const review=req.body
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+        const newReview = {
+          $push: {
+            reviews:review,
+          },
+        };
+        const result= await upcomingMealsCollection.updateOne(query,newReview,options)
+       res.send(result)
+      
+    })
+    // add liker info 
+    app.put('/upcoming-meals/likerInfo/:id',async(req,res)=>{
+      const{id}=req.params
+      const likesInfo=req.body
+      const query={_id:new ObjectId(id)}
+      const options = { upsert: true };
+        const newLikesInfo = {
+          $push: {
+            likesInfo:likesInfo,
+          },
+        };
+        const result= await upcomingMealsCollection.updateOne(query,newLikesInfo,options)
        res.send(result)
       
     })
@@ -269,7 +343,7 @@ async function run() {
         const query={_id:new ObjectId(id)}
         const result=await requestsCollection.deleteOne(query)
         res.send(result) 
-      }) 
+      })  
       // get all reviews by user email from db
       app.get('/reviews/:email',async(req,res)=>{ 
         const {email}=req.params
@@ -351,11 +425,13 @@ async function run() {
       // save a user data in db
     app.put('/user', async (req, res) => {
       const user = req.body
+      console.log(user);
       const query = { email: user?.email }
       // check if user already exists in db
       const isExist = await usersCollection.findOne(query)
       if (isExist) {
-        if (user.badge === 'Silver'||'Gold'||'Platinum') {
+        if (user?.badge === 'Silver' ||user?.badge ==='Gold'||user?.badge ==='Platinum') {
+          console.log(434,user?.badge);
           // if existing user try to change his role
           const result = await usersCollection.updateOne(query, {
             $set: { badge: user?.badge },
@@ -393,7 +469,13 @@ async function run() {
 
     // get all users data from db
     app.get('/users', verifyToken, async (req, res) => {
-      const result = await usersCollection.find().toArray()
+      const {search}=req.query
+      console.log(search);
+      const query={
+        email: { $regex: search, $options: 'i' },
+        name: { $regex: search, $options: 'i' },
+      }
+      const result = await usersCollection.find(query).toArray()
       res.send(result)
     })
       //update a user role
